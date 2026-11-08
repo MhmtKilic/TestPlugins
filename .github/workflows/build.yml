@@ -17,10 +17,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # Android projeleri için gerekli olan SDK kurulumu (Hata almayı önler)
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
@@ -32,4 +28,3 @@ jobs:
         with:
           name: plugin-cs3
           path: '**/*.cs3'
-          
