@@ -1,25 +1,9 @@
-
-
-package com.example.test
+package com.example
 
 import android.util.Log
-import com.lagradost.cloudstream3.HomePageResponse
-import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.lagradost.cloudstream3.MainAPI
-import com.lagradost.cloudstream3.MainPageRequest
-import com.lagradost.cloudstream3.SearchResponse
-import com.lagradost.cloudstream3.SubtitleFile
-import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.fixUrlNull
-import com.lagradost.cloudstream3.mainPageOf
-import com.lagradost.cloudstream3.newHomePageResponse
-import com.lagradost.cloudstream3.newMovieLoadResponse
-import com.lagradost.cloudstream3.newMovieSearchResponse
-import com.lagradost.cloudstream3.toRatingInt
-import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
@@ -33,10 +17,9 @@ class `4KFilmIzlesene` : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie)
 
-    // ! CloudFlare bypass
-    override var sequentialMainPage = true        // * https://recloudstream.github.io/dokka/-cloudstream/com.lagradost.cloudstream3/-main-a-p-i/index.html#-2049735995%2FProperties%2F101969414
-    override var sequentialMainPageDelay       = 50L  // ? 0.05 saniye
-    override var sequentialMainPageScrollDelay = 50L  // ? 0.05 saniye
+    override var sequentialMainPage = true
+    override var sequentialMainPageDelay       = 50L
+    override var sequentialMainPageScrollDelay = 50L
 
     override val mainPage = mainPageOf(
         "${mainUrl}/"                               to "Yeni Filmler",
@@ -89,20 +72,21 @@ class `4KFilmIzlesene` : MainAPI() {
         if (this.selectFirst("div.img img")?.attr("data-lazy-src") == "" ||
             this.selectFirst("div.img img")?.attr("data-lazy-src") == null) {
             val posterUrl = fixUrlNull(this.selectFirst("div.img img")?.attr("src"))
-            return newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl
+            return newMovieSearchResponse(title, href, TvType.Movie) { 
+                this.posterUrl = posterUrl
                 this.score = Score.from10(score)
             }
         } else {
             val posterUrl = fixUrlNull(this.selectFirst("div.img img")?.attr("data-lazy-src"))
             return newMovieSearchResponse(title, href, TvType.Movie) {
                 this.posterUrl = posterUrl
-                this.score = Score.from10(score)}
+                this.score = Score.from10(score)
+            }
         }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val document = app.get("${mainUrl}/?s=${query}").document
-
         return document.select("div.film-box").mapNotNull { it.toMainPageResult() }
     }
 
@@ -143,10 +127,11 @@ class `4KFilmIzlesene` : MainAPI() {
     ): Boolean {
         Log.d("4KI", "data » ${data}")
         val document = app.get(data).document
-        var iframe   = fixUrlNull(document.selectFirst("div.video-content iframe")?.attr("src")) ?: return false
+        val iframe   = fixUrlNull(document.selectFirst("div.video-content iframe")?.attr("src")) ?: return false
         Log.d("4KI", "iframe » ${iframe}")
 
-        com.lagradost.cloudstream3.utils.loadExtractor(iframe, "${mainUrl}/", subtitleCallback, callback)
+        // Hata veren kısım burasıydı, artık utils paketinden geldiği için sorunsuz derlenecek
+        loadExtractor(iframe, "${mainUrl}/", subtitleCallback, callback)
         return true
     }
 }
