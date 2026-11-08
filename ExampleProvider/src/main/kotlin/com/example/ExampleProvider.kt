@@ -146,7 +146,7 @@ class `4KFilmIzlesene` : MainAPI() {
         var iframe   = fixUrlNull(document.selectFirst("div.video-content iframe")?.attr("src")) ?: return false
         Log.d("4KI", "iframe » ${iframe}")
 
-        loadExtractor(iframe, "${mainUrl}/", subtitleCallback, callback)
+        com.lagradost.cloudstream3.utils.loadExtractor(iframe, "${mainUrl}/", subtitleCallback, callback)
         return true
     }
 }
