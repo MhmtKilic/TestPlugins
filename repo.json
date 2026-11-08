@@ -1,0 +1,8 @@
+{
+    "name": "MhmtKilic Repo",
+    "description": "Kendi Eklentilerim",
+    "manifestVersion": 1,
+    "pluginLists": [
+        "https://raw.githubusercontent.com/MhmtKilic/TestPlugins/builds/plugins.json"
+    ]
+}
