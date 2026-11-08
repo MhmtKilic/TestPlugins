@@ -1,8 +1,11 @@
-name: Build CS3 Plugin
+name: Build and Release Plugin
 
 on:
   push:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -21,12 +24,10 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew ExampleProvider:make
+        run: ./gradlew clean ExampleProvider:make
 
-      - name: Upload CS3
-        uses: actions/upload-artifact@v4
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: plugin-cs3
-          path: '**/*.cs3'
-
-
+          tag_name: latest
+          files: "**/*.cs3"
