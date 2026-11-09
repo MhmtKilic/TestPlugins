@@ -4,7 +4,6 @@
         "name": "FullHDFilmizlesene",
         "authors": ["MhmtKilic"],
         "description": "FullHDFilmizlesene Eklentisi",
-        "repositoryUrl": "https://raw.githubusercontent.com/MhmtKilic/TestPlugins/Builds/",
         "url": "https://github.com/MhmtKilic/TestPlugins/releases/download/latest/ExampleProvider.cs3",
         "version": 1,
         "tvTypes": ["Movie"],
