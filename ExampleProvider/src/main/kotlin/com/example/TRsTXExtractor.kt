@@ -61,4 +61,4 @@ open class TRsTX : ExtractorApi() {
         @JsonProperty("title") val title: String? = null,
         @JsonProperty("file")  val file: String?  = null
     )
-}
+} 
