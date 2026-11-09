@@ -5,8 +5,8 @@ import com.lagradost.cloudstream3.plugins.Plugin
 import android.content.Context
 
 @CloudstreamPlugin
-class `4KFilmIzlesenePlugin`: Plugin() {
+class FilmIzlesenePlugin: Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(`4KFilmIzlesene`())
+        registerMainAPI(FilmIzlesene())
     }
 }
