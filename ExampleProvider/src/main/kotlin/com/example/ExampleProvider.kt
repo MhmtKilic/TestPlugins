@@ -7,9 +7,9 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
-class FilmIzlesene : MainAPI() {
-    override var mainUrl = "https://www.4kfilmizlesene.xyz"
-    override var name = "4KFilmİzlesene"
+class FullHDFilmIzlesene : MainAPI() {
+    override var mainUrl = "https://www.fullhdfilmizlesene.pw"
+    override var name = "FullHDFilmİzle"
     override val hasMainPage = true
     override var lang = "tr"
     override val hasQuickSearch = false
@@ -125,10 +125,10 @@ class FilmIzlesene : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        Log.d("4KI", "data » ${data}")
+        Log.d("FullHD", "data » ${data}")
         val document = app.get(data).document
         val iframe   = fixUrlNull(document.selectFirst("div.video-content iframe")?.attr("src")) ?: return false
-        Log.d("4KI", "iframe » ${iframe}")
+        Log.d("FullHD", "iframe » ${iframe}")
 
         loadExtractor(iframe, "${mainUrl}/", subtitleCallback, callback)
         return true
