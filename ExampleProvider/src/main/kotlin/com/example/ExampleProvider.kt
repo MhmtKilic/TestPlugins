@@ -25,15 +25,17 @@ class FullHDFilmizlesene : MainAPI() {
         override fun intercept(chain: Interceptor.Chain): Response {
             val request = chain.request()
             val response = chain.proceed(request)
-            if (response.body?.string()?.contains("Just a moment") == true) {
+            
+            // DÜZELTME: response.body?.string() yerine peekBody() kullanılıyor.
+            // Böylece ana kodun gövdeyi okuma hakkı elinden alınmıyor.
+            val bodyString = response.peekBody(Long.MAX_VALUE).string()
+            if (bodyString.contains("Just a moment")) {
                 return cloudflareKiller.intercept(chain)
             }
             return response
         }
     }
     
-    // DİKKAT: Site uzantısı .now'dan .pw'ye (veya .com'a) değişmiş olabilir. 
-    // Eğer eklenti çalışmazsa tarayıcıdan sitenin güncel adresini bulup burayı değiştir.
     override var mainUrl              = "https://www.fullhdfilmizlesene.pw"
     override var name                 = "FullHDFilmizlesene"
     override val hasMainPage          = true
@@ -41,7 +43,6 @@ class FullHDFilmizlesene : MainAPI() {
     override val hasQuickSearch       = false
     override val supportedTypes       = setOf(TvType.Movie)
 
-    // İsteklerin engellenmemesi için tarayıcı kimliği (User-Agent)
     private val headers = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -78,11 +79,8 @@ class FullHDFilmizlesene : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url      = if (page <= 1) request.data else "${request.data}/$page"
-        
-        // User-Agent ve interceptor eklendi
         val document = app.get(url, headers = headers, interceptor = interceptor).document
         val home     = document.select("li.film").mapNotNull { it.toSearchResult() }
-
         return newHomePageResponse(request.name, home)
     }
 
@@ -90,12 +88,10 @@ class FullHDFilmizlesene : MainAPI() {
         val title     = this.selectFirst("span.film-title")?.text() ?: return null
         val href      = fixUrlNull(this.selectFirst("a")?.attr("href")) ?: return null
         val posterUrl = fixUrlNull(this.selectFirst("img")?.attr("data-src"))
-
         return newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        // User-Agent eklendi
         val document = app.get("${mainUrl}/arama/${query}", headers = headers, interceptor = interceptor).document
         return document.select("li.film").mapNotNull { it.toSearchResult() }
     }
@@ -103,9 +99,7 @@ class FullHDFilmizlesene : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        // User-Agent eklendi
         val document = app.get(url, headers = headers, interceptor = interceptor).document
-
         val title           = document.selectFirst("div[class=izle-titles]")?.text()?.trim() ?: return null
         val poster          = fixUrlNull(document.selectFirst("div img")?.attr("data-src"))
         val year            = document.selectFirst("div.dd a.category")?.text()?.split(" ")?.get(0)?.trim()?.toIntOrNull()
@@ -114,19 +108,13 @@ class FullHDFilmizlesene : MainAPI() {
         val rating          = document.selectFirst("div.puanx-puan")?.text()?.split(" ")?.last()?.toRatingInt()
         val duration        = document.selectFirst("span.sure")?.text()?.split(" ")?.get(0)?.trim()?.toIntOrNull()
         val trailer         = Regex("""embedUrl": "(.*)"""").find(document.html())?.groupValues?.get(1)
-        val actors          = document.select("div.film-info ul li:nth-child(2) a > span").map {
-            Actor(it.text())
-        }
-
+        val actors          = document.select("div.film-info ul li:nth-child(2) a > span").map { Actor(it.text()) }
         val recommendations = document.selectXpath("//div[span[text()='Benzer Filmler']]/following-sibling::section/ul/li").mapNotNull {
             val recName      = it.selectFirst("span.film-title")?.text() ?: return@mapNotNull null
             val recHref      = fixUrlNull(it.selectFirst("a")?.attr("href")) ?: return@mapNotNull null
             val recPosterUrl = fixUrlNull(it.selectFirst("img")?.attr("data-src"))
-            newMovieSearchResponse(recName, recHref, TvType.Movie) {
-                this.posterUrl = recPosterUrl
-            }
+            newMovieSearchResponse(recName, recHref, TvType.Movie) { this.posterUrl = recPosterUrl }
         }
-
         return newMovieLoadResponse(title, url, TvType.Movie, url) {
             this.posterUrl       = poster
             this.year            = year
@@ -140,9 +128,7 @@ class FullHDFilmizlesene : MainAPI() {
         }
     }
 
-    private fun atob(s: String): String {
-        return String(Base64.decode(s, Base64.DEFAULT))
-    }
+    private fun atob(s: String): String = String(Base64.decode(s, Base64.DEFAULT))
 
     private fun rtt(s: String): String {
         fun rot13Char(c: Char): Char {
@@ -156,17 +142,11 @@ class FullHDFilmizlesene : MainAPI() {
     }
 
     private fun getVideoLinks(document: Document): List<Map<String, String>> {
-        val scriptContent = document.select("script")
-            .mapNotNull { it.data() }
-            .firstOrNull { it.contains("scx =") }
-            ?.trim() ?: return emptyList()
-
-        val scxData         = Regex("scx = (.*?);").find(scriptContent)?.groupValues?.get(1) ?: return emptyList()
+        val scriptContent = document.select("script").mapNotNull { it.data() }.firstOrNull { it.contains("scx =") }?.trim() ?: return emptyList()
+        val scxData = Regex("scx = (.*?);").find(scriptContent)?.groupValues?.get(1) ?: return emptyList()
         val scxMap: SCXData = jacksonObjectMapper().readValue(scxData)
-        val keys             = listOf("atom", "advid", "advidprox", "proton", "fast", "fastly", "tr", "en")
-
+        val keys = listOf("atom", "advid", "advidprox", "proton", "fast", "fastly", "tr", "en")
         val linkList = mutableListOf<Map<String, String>>()
-
         for (key in keys) {
             val t = when (key) {
                 "atom"      -> scxMap.atom?.sx?.t
@@ -179,19 +159,14 @@ class FullHDFilmizlesene : MainAPI() {
                 "en"        -> scxMap.en?.sx?.t
                 else        -> null
             }
-
             when (t) {
                 is List<*> -> {
                     val links = t.filterIsInstance<String>().map { link -> atob(rtt(link)) }
                     linkList.add(mapOf(key to links.joinToString(",")))
                 }
                 is Map<*, *> -> {
-                    val links = t.mapValues { (_, value) ->
-                        if (value is String) atob(rtt(value)) else ""
-                    }
-                    val safeLinks = links.mapKeys { (key, _) ->
-                        key?.toString() ?: "Unknown"
-                    }
+                    val links = t.mapValues { (_, value) -> if (value is String) atob(rtt(value)) else "" }
+                    val safeLinks = links.mapKeys { (key, _) -> key?.toString() ?: "Unknown" }
                     linkList.add(safeLinks)
                 }
             }
@@ -200,11 +175,9 @@ class FullHDFilmizlesene : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
-        // User-Agent eklendi
         val document    = app.get(data, headers = headers, interceptor = interceptor).document
         val videoLinks = getVideoLinks(document)
         if (videoLinks.isEmpty()) return false
-
         for (videoMap in videoLinks) {
             for ((key, value) in videoMap) {
                 val videoUrl = fixUrlNull(value) ?: continue
@@ -231,12 +204,8 @@ class FullHDFilmizlesene : MainAPI() {
     )
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    data class AtomData(
-        @JsonProperty("sx") var sx: SXData
-    )
+    data class AtomData(@JsonProperty("sx") var sx: SXData)
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    data class SXData(
-        @JsonProperty("t") var t: Any
-    )
+    data class SXData(@JsonProperty("t") var t: Any)
                                     }
