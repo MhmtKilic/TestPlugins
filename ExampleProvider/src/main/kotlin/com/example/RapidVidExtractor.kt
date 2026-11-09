@@ -17,18 +17,27 @@ open class RapidVid : ExtractorApi() {
     override suspend fun getUrl(url: String, referer: String?, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
         val extRef = referer ?: ""
         
-        // Cloudstream'in isteğinin engellenmemesi için CloudflareKiller kullanıyoruz
+        // Sayfayı çek (Tarayıcı kimliği ve CloudflareKiller ile)
         val videoReq = app.get(
             url, 
             referer = extRef, 
             interceptor = cloudflareKiller,
             headers = mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3"
             )
         ).text
 
-        // 1. YENİ YÖNTEM: atomCodecTelemetry (Direkt Regex ile link çekme)
-        // JSON parse etmek yerine direkt "h264":"..." kısmını arıyoruz.
+        // Loglara HTML uzunluğunu yazdır (Android Studio / Logcat için)
+        Log.d("RapidVid", "📄 HTML Uzunluğu: ${videoReq.length}")
+
+        // TEŞHİS 1: Cloudflare Engeli mi?
+        if (videoReq.contains("Just a moment") || videoReq.contains("cf-browser-verification") || videoReq.length < 3000) {
+            throw ErrorLoadingException("❌ Cloudflare Engeli! HTML Uzunluğu: ${videoReq.length}. Lütfen farklı bir DNS/VPN deneyin.")
+        }
+
+        // 1. YENİ YÖNTEM: atomCodecTelemetry (Agresif Regex)
         val h264Match = Regex(""""h264"\s*:\s*"([^"]+)"""").find(videoReq)
         val av1Match = Regex(""""av1"\s*:\s*"([^"]+)"""").find(videoReq)
         
@@ -36,7 +45,7 @@ open class RapidVid : ExtractorApi() {
                     ?: av1Match?.groupValues?.get(1)?.replace("\\/", "/")
 
         if (!videoUrl.isNullOrBlank() && !videoUrl.contains(".vtt")) {
-            Log.d("RapidVid", "✅ Yeni yöntemle video bulundu: $videoUrl")
+            Log.d("RapidVid", "✅ Video bulundu: $videoUrl")
             callback.invoke(
                 newExtractorLink(
                     source = this.name,
@@ -51,7 +60,7 @@ open class RapidVid : ExtractorApi() {
             return
         }
 
-        // 2. ESKİ YÖNTEM (Geriye dönük uyumluluk)
+        // 2. ESKİ YÖNTEM (Yedek)
         val p8Payload  = Regex("""window\._p8\s*=\s*'([^']+)'""").find(videoReq)?.groupValues?.get(1)
         val p8Json     = p8Payload?.let { decodeP8(it) }
         val decoded    = p8Json?.let { Regex(""""cm"\s*:\s*"([^"]+)"""").find(it)?.groupValues?.get(1)?.replace("\\/", "/") }
@@ -59,7 +68,6 @@ open class RapidVid : ExtractorApi() {
 
         if (!decoded.isNullOrBlank() && !decoded.contains(".vtt")) {
             Log.d("RapidVid", "✅ Eski yöntemle video bulundu: $decoded")
-            
             callback.invoke(
                 newExtractorLink(
                     source  = this.name,
@@ -93,8 +101,11 @@ open class RapidVid : ExtractorApi() {
             return
         }
 
-        // Hata mesajına sayfanın uzunluğunu ekleyelim ki engellenip engellenmediğimizi anlayalım
-        throw ErrorLoadingException("RapidVid video linki bulunamadı. (HTML Uzunluğu: ${videoReq.length})")
+        // TEŞHİS 2: Site yapısı değişmişse
+        // Eğer buraya geldiysek, ne Cloudflare engeli var, ne atomCodecTelemetry, ne eski yöntem, ne de direkt link.
+        // HTML'in ilk 100 karakterini hata mesajına ekleyelim ki ne olduğunu görelim.
+        val preview = videoReq.take(100).replace("\n", " ").replace("\r", "")
+        throw ErrorLoadingException("Video bulunamadı! HTML Uzunluğu: ${videoReq.length}. Başlangıç: $preview")
     }
 
     private fun decodeP8(payload: String): String? {
