@@ -14,18 +14,24 @@ open class RapidVid : ExtractorApi() {
     override val requiresReferer = true
 
     override suspend fun getUrl(url: String, referer: String?, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
-        val extRef   = referer ?: ""
-        val videoReq = app.get(url, referer = extRef).text
+        val extRef = referer ?: ""
+        
+        // Tarayıcı kimliği ekleyerek sitenin bizi engellemesini önlüyoruz
+        val headers = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3"
+        )
+        
+        val videoReq = app.get(url, referer = extRef, headers = headers).text
 
         // 1. YENİ YÖNTEM: window.atomCodecTelemetry 
-        // (Sitedeki yeni oynatıcı videoyu bu JSON objesine gizliyor)
         val telemetryRegex = Regex("""window\.atomCodecTelemetry\s*=\s*(\{.*?\});""")
         val telemetryMatch = telemetryRegex.find(videoReq)
         
         if (telemetryMatch != null) {
             val jsonStr = telemetryMatch.groupValues[1]
             try {
-                // JSON'u oku
                 val data = jacksonObjectMapper().readValue<Map<String, String>>(jsonStr)
                 val videoUrl = data["h264"]?.replace("\\/", "/") ?: data["av1"]?.replace("\\/", "/")
                 
@@ -49,8 +55,7 @@ open class RapidVid : ExtractorApi() {
             }
         }
 
-        // 2. ESKİ YÖNTEM: window._p8
-        // (Eski filmlerde hala bu yöntem kullanılıyor olabilir, o yüzden siliyoruz)
+        // 2. ESKİ YÖNTEM: window._p8 (Geriye dönük uyumluluk)
         val p8Payload  = Regex("""window\._p8\s*=\s*'([^']+)'""").find(videoReq)?.groupValues?.get(1)
         val p8Json     = p8Payload?.let { decodeP8(it) }
         val decoded    = p8Json?.let { Regex(""""cm"\s*:\s*"([^"]+)"""").find(it)?.groupValues?.get(1)?.replace("\\/", "/") }
@@ -59,7 +64,6 @@ open class RapidVid : ExtractorApi() {
         if (!decoded.isNullOrBlank() && !decoded.contains(".vtt")) {
             Log.d("RapidVid", "✅ Eski yöntemle video bulundu: $decoded")
             
-            // Altyazıları çek (varsa)
             val subUrls  = mutableSetOf<String>()
             val subSource = videoReq + "\n" + (p8Json ?: "")
             Regex(""""file"\s*:\s*"([^"]+\.vtt)",\s*"label"\s*:\s*"([^"]+)"""").findAll(subSource).forEach {
