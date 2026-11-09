@@ -31,12 +31,22 @@ class FullHDFilmizlesene : MainAPI() {
             return response
         }
     }
-    override var mainUrl              = "https://www.fullhdfilmizlesene.now"
+    
+    // DİKKAT: Site uzantısı .now'dan .pw'ye (veya .com'a) değişmiş olabilir. 
+    // Eğer eklenti çalışmazsa tarayıcıdan sitenin güncel adresini bulup burayı değiştir.
+    override var mainUrl              = "https://www.fullhdfilmizlesene.pw"
     override var name                 = "FullHDFilmizlesene"
     override val hasMainPage          = true
     override var lang                 = "tr"
     override val hasQuickSearch       = false
     override val supportedTypes       = setOf(TvType.Movie)
+
+    // İsteklerin engellenmemesi için tarayıcı kimliği (User-Agent)
+    private val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language" to "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3"
+    )
 
     override val mainPage = mainPageOf(
         "${mainUrl}/en-cok-izlenen-filmler"          to "En Çok İzlenen Filmler",
@@ -68,7 +78,9 @@ class FullHDFilmizlesene : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url      = if (page <= 1) request.data else "${request.data}/$page"
-        val document = app.get(url, interceptor = interceptor).document
+        
+        // User-Agent ve interceptor eklendi
+        val document = app.get(url, headers = headers, interceptor = interceptor).document
         val home     = document.select("li.film").mapNotNull { it.toSearchResult() }
 
         return newHomePageResponse(request.name, home)
@@ -83,14 +95,16 @@ class FullHDFilmizlesene : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get("${mainUrl}/arama/${query}", interceptor = interceptor).document
+        // User-Agent eklendi
+        val document = app.get("${mainUrl}/arama/${query}", headers = headers, interceptor = interceptor).document
         return document.select("li.film").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url, interceptor = interceptor).document
+        // User-Agent eklendi
+        val document = app.get(url, headers = headers, interceptor = interceptor).document
 
         val title           = document.selectFirst("div[class=izle-titles]")?.text()?.trim() ?: return null
         val poster          = fixUrlNull(document.selectFirst("div img")?.attr("data-src"))
@@ -186,7 +200,8 @@ class FullHDFilmizlesene : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
-        val document    = app.get(data, interceptor = interceptor).document
+        // User-Agent eklendi
+        val document    = app.get(data, headers = headers, interceptor = interceptor).document
         val videoLinks = getVideoLinks(document)
         if (videoLinks.isEmpty()) return false
 
@@ -225,4 +240,3 @@ class FullHDFilmizlesene : MainAPI() {
         @JsonProperty("t") var t: Any
     )
                                     }
-                                    
