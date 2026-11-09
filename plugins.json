@@ -1,10 +1,12 @@
 [
     {
+        "internalName": "4KFilmIzlesene",
+        "name": "4KFilmİzlesene",
+        "authors": ["MhmtKilic"],
+        "description": "4K Film İzlesene Eklentisi",
+        "repositoryUrl": "https://raw.githubusercontent.com/MhmtKilic/TestPlugins/Builds/",
         "url": "https://github.com/MhmtKilic/TestPlugins/releases/download/latest/ExampleProvider.cs3",
         "version": 1,
-        "name": "4KFilmİzlesene",
-        "description": "4K Film İzlesene Eklentisi",
-        "authors": ["MhmtKilic"],
         "tvTypes": ["Movie"],
         "language": "tr"
     }
