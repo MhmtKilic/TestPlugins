@@ -5,22 +5,45 @@ import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.network.CloudflareKiller
 
 open class RapidVid : ExtractorApi() {
     override val name            = "RapidVid"
     override val mainUrl         = "https://rapidvid.org"
     override val requiresReferer = true
 
-    override suspend fun getUrl(url: String, referer: String?, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
-        // Cloudflare'i aşmak için RapidVid sayfasını Python sunucumuz üzerinden çekiyoruz
-        val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-        val videoReq = try {
-            app.get("http://127.0.0.1:3000/api/fetch?url=$encodedUrl").text
-        } catch (e: Exception) {
-            app.get(url, referer = referer).text // Python açık değilse doğrudan çekmeyi dene
-        }
+    private val cloudflareKiller by lazy { CloudflareKiller() }
 
-        // 1. YENİ YÖNTEM: atomCodecTelemetry
+    override suspend fun getUrl(url: String, referer: String?, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
+        val extRef = referer ?: "https://www.fullhdfilmizlesene.now/"
+        
+        // Python'daki curl_cffi (Chrome110) taklidini Kotlin'de tam başlıklarla yapıyoruz
+        val fullBrowserHeaders = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding" to "gzip, deflate, br",
+            "Sec-Ch-Ua" to "\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\", \"Not-A.Brand\";v=\"99\"",
+            "Sec-Ch-Ua-Mobile" to "?0",
+            "Sec-Ch-Ua-Platform" to "\"Windows\"",
+            "Sec-Fetch-Dest" to "document",
+            "Sec-Fetch-Mode" to "navigate",
+            "Sec-Fetch-Site" to "cross-site",
+            "Sec-Fetch-User" to "?1",
+            "Upgrade-Insecure-Requests" to "1"
+        )
+
+        // CloudflareKiller interceptor'ı ile birlikte isteği atıyoruz
+        val videoReq = app.get(
+            url, 
+            referer = extRef, 
+            interceptor = cloudflareKiller,
+            headers = fullBrowserHeaders
+        ).text
+
+        Log.d("RapidVid", "📄 HTML Uzunluğu: ${videoReq.length}")
+
+        // 1. YENİ YÖNTEM: atomCodecTelemetry (Agresif Regex)
         val h264Match = Regex(""""h264"\s*:\s*"([^"]+)"""").find(videoReq)
         val av1Match = Regex(""""av1"\s*:\s*"([^"]+)"""").find(videoReq)
         
@@ -36,20 +59,21 @@ open class RapidVid : ExtractorApi() {
                     url = videoUrl,
                     type = ExtractorLinkType.M3U8
                 ) {
-                    this.referer = url
+                    this.referer = extRef // Referer'ı mutlaka RapidVid veya ana site yapmalıyız
                     this.quality = Qualities.Unknown.value
                 }
             )
             return
         }
 
-        // 2. ESKİ YÖNTEM (Geriye dönük uyumluluk)
+        // 2. ESKİ YÖNTEM (Yedek)
         val p8Payload  = Regex("""window\._p8\s*=\s*'([^']+)'""").find(videoReq)?.groupValues?.get(1)
         val p8Json     = p8Payload?.let { decodeP8(it) }
         val decoded    = p8Json?.let { Regex(""""cm"\s*:\s*"([^"]+)"""").find(it)?.groupValues?.get(1)?.replace("\\/", "/") }
             ?: decodeLegacy(videoReq)
 
         if (!decoded.isNullOrBlank() && !decoded.contains(".vtt")) {
+            Log.d("RapidVid", "✅ Eski yöntemle video bulundu: $decoded")
             callback.invoke(
                 newExtractorLink(
                     source  = this.name,
@@ -57,7 +81,7 @@ open class RapidVid : ExtractorApi() {
                     url     = decoded,
                     type    = ExtractorLinkType.M3U8
                 ) {
-                    this.referer = url
+                    this.referer = extRef
                     this.quality = Qualities.Unknown.value
                 }
             )
@@ -68,6 +92,7 @@ open class RapidVid : ExtractorApi() {
         val directMatch = Regex("""(https?://[^"'\s\\]+\.m3u8[^"'\s\\]*)""").find(videoReq)
         if (directMatch != null) {
             val directUrl = directMatch.groupValues[1].replace("\\/", "/")
+            Log.d("RapidVid", "✅ HTML içinden video bulundu: $directUrl")
             callback.invoke(
                 newExtractorLink(
                     source = this.name,
@@ -75,14 +100,14 @@ open class RapidVid : ExtractorApi() {
                     url = directUrl,
                     type = ExtractorLinkType.M3U8
                 ) {
-                    this.referer = url
+                    this.referer = extRef
                     this.quality = Qualities.Unknown.value
                 }
             )
             return
         }
 
-        throw ErrorLoadingException("Video linki bulunamadı. Python sunucunuz açık mı? (HTML Uzunluğu: ${videoReq.length})")
+        throw ErrorLoadingException("Video linki bulunamadı. (Cloudflare engeli olabilir. HTML Uzunluğu: ${videoReq.length})")
     }
 
     private fun decodeP8(payload: String): String? {
