@@ -6,6 +6,7 @@
         "description": "FullHDFilmizlesene Eklentisi",
         "url": "https://github.com/MhmtKilic/TestPlugins/releases/download/latest/ExampleProvider.cs3",
         "version": 1,
+        "status": 1,
         "tvTypes": ["Movie"],
         "language": "tr"
     }
