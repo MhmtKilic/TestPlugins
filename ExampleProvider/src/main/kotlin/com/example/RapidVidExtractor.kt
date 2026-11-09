@@ -100,3 +100,4 @@ open class RapidVid : ExtractorApi() {
             m.groupValues[1].toInt(16).toChar().toString()
         }
                               }
+                              
