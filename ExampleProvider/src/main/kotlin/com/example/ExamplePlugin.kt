@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
 package com.example
 
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
@@ -5,8 +6,13 @@ import com.lagradost.cloudstream3.plugins.Plugin
 import android.content.Context
 
 @CloudstreamPlugin
-class FullHDFilmIzlesenePlugin: Plugin() {
+class FullHDFilmizlesenePlugin: Plugin() {
     override fun load(context: Context) {
-        registerMainAPI(FullHDFilmIzlesene())
+        registerMainAPI(FullHDFilmizlesene())
+        registerExtractorAPI(RapidVid())
+        registerExtractorAPI(TRsTX())
+        registerExtractorAPI(VidMoxy())
+        registerExtractorAPI(Sobreatsesuyp())
+        registerExtractorAPI(TurboImgz())
     }
 }
