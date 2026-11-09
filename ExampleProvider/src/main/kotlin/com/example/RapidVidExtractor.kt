@@ -5,6 +5,8 @@ import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 
 open class RapidVid : ExtractorApi() {
     override val name            = "RapidVid"
@@ -15,38 +17,97 @@ open class RapidVid : ExtractorApi() {
         val extRef   = referer ?: ""
         val videoReq = app.get(url, referer = extRef).text
 
+        // 1. YENİ YÖNTEM: window.atomCodecTelemetry 
+        // (Sitedeki yeni oynatıcı videoyu bu JSON objesine gizliyor)
+        val telemetryRegex = Regex("""window\.atomCodecTelemetry\s*=\s*(\{.*?\});""")
+        val telemetryMatch = telemetryRegex.find(videoReq)
+        
+        if (telemetryMatch != null) {
+            val jsonStr = telemetryMatch.groupValues[1]
+            try {
+                // JSON'u oku
+                val data = jacksonObjectMapper().readValue<Map<String, String>>(jsonStr)
+                val videoUrl = data["h264"]?.replace("\\/", "/") ?: data["av1"]?.replace("\\/", "/")
+                
+                if (!videoUrl.isNullOrBlank()) {
+                    Log.d("RapidVid", "✅ Yeni yöntemle video bulundu: $videoUrl")
+                    callback.invoke(
+                        newExtractorLink(
+                            source = this.name,
+                            name = this.name,
+                            url = videoUrl,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            this.referer = url
+                            this.quality = Qualities.Unknown.value
+                        }
+                    )
+                    return
+                }
+            } catch (e: Exception) {
+                Log.e("RapidVid", "Telemetry parse hatası: ${e.message}")
+            }
+        }
+
+        // 2. ESKİ YÖNTEM: window._p8
+        // (Eski filmlerde hala bu yöntem kullanılıyor olabilir, o yüzden siliyoruz)
         val p8Payload  = Regex("""window\._p8\s*=\s*'([^']+)'""").find(videoReq)?.groupValues?.get(1)
         val p8Json     = p8Payload?.let { decodeP8(it) }
         val decoded    = p8Json?.let { Regex(""""cm"\s*:\s*"([^"]+)"""").find(it)?.groupValues?.get(1)?.replace("\\/", "/") }
             ?: decodeLegacy(videoReq)
 
-        if (decoded.isNullOrBlank()) throw ErrorLoadingException("File not found")
-
-        val subUrls  = mutableSetOf<String>()
-        val subSource = videoReq + "\n" + (p8Json ?: "")
-        Regex(""""file"\s*:\s*"([^"]+\.vtt)",\s*"label"\s*:\s*"([^"]+)"""").findAll(subSource).forEach {
-            val (subUrl, subLang) = it.destructured
-            if (subUrls.add(subUrl)) {
-                subtitleCallback.invoke(
-                    SubtitleFile(
-                        lang = unescapeUnicode(subLang).trim(),
-                        url  = fixUrl(subUrl.replace("\\", ""))
+        if (!decoded.isNullOrBlank() && !decoded.contains(".vtt")) {
+            Log.d("RapidVid", "✅ Eski yöntemle video bulundu: $decoded")
+            
+            // Altyazıları çek (varsa)
+            val subUrls  = mutableSetOf<String>()
+            val subSource = videoReq + "\n" + (p8Json ?: "")
+            Regex(""""file"\s*:\s*"([^"]+\.vtt)",\s*"label"\s*:\s*"([^"]+)"""").findAll(subSource).forEach {
+                val (subUrl, subLang) = it.destructured
+                if (subUrls.add(subUrl)) {
+                    subtitleCallback.invoke(
+                        SubtitleFile(
+                            lang = unescapeUnicode(subLang).trim(),
+                            url  = fixUrl(subUrl.replace("\\", ""))
+                        )
                     )
-                )
+                }
             }
+
+            callback.invoke(
+                newExtractorLink(
+                    source  = this.name,
+                    name    = this.name,
+                    url     = decoded,
+                    type    = ExtractorLinkType.M3U8
+                ) {
+                    this.referer = url
+                    this.quality = Qualities.Unknown.value
+                }
+            )
+            return
         }
 
-        callback.invoke(
-            newExtractorLink(
-                source  = this.name,
-                name    = this.name,
-                url     = decoded,
-                type    = ExtractorLinkType.M3U8
-            ) {
-                this.referer = url
-                this.quality = Qualities.Unknown.value
-            }
-        )
+        // 3. Son Çare: Doğrudan HTML içinde m3u8 arama
+        val directMatch = Regex("""(https?://[^"'\s\\]+\.m3u8[^"'\s\\]*)""").find(videoReq)
+        if (directMatch != null) {
+            val directUrl = directMatch.groupValues[1].replace("\\/", "/")
+            Log.d("RapidVid", "✅ HTML içinden video bulundu: $directUrl")
+            callback.invoke(
+                newExtractorLink(
+                    source = this.name,
+                    name = this.name,
+                    url = directUrl,
+                    type = ExtractorLinkType.M3U8
+                ) {
+                    this.referer = url
+                    this.quality = Qualities.Unknown.value
+                }
+            )
+            return
+        }
+
+        throw ErrorLoadingException("RapidVid video linki bulunamadı")
     }
 
     private fun decodeP8(payload: String): String? {
@@ -65,7 +126,7 @@ open class RapidVid : ExtractorApi() {
     }
 
     private fun decodeLegacy(videoReq: String): String? {
-        Regex(""""file": "(.*)","""").find(videoReq)?.groupValues?.get(1)?.let { extractedValue ->
+        Regex(""""file": "(.*?)","""").find(videoReq)?.groupValues?.get(1)?.let { extractedValue ->
             if (!extractedValue.contains("\\x")) return extractedValue.replace("\\", "")
             val bytes = extractedValue.split("\\x").filter { it.isNotEmpty() }.map { it.toInt(16).toByte() }.toByteArray()
             return String(bytes, Charsets.UTF_8)
@@ -100,4 +161,3 @@ open class RapidVid : ExtractorApi() {
             m.groupValues[1].toInt(16).toChar().toString()
         }
                               }
-                              
