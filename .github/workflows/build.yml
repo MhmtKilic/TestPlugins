@@ -31,3 +31,4 @@ jobs:
         with:
           tag_name: latest
           files: "**/*.cs3"
+          overwrite: true  # <--- ESKİ DOSYANIN ÜZERİNE YAZAR
