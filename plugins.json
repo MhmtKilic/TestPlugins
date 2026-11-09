@@ -1,9 +1,9 @@
 [
     {
-        "internalName": "com.example.FullHDFilmIzlesenePlugin",
-        "name": "FullHDFilmİzle",
+        "internalName": "com.example.FullHDFilmizlesenePlugin",
+        "name": "FullHDFilmizlesene",
         "authors": ["MhmtKilic"],
-        "description": "Full HD Film İzleme Eklentisi",
+        "description": "FullHDFilmizlesene Eklentisi",
         "repositoryUrl": "https://raw.githubusercontent.com/MhmtKilic/TestPlugins/Builds/",
         "url": "https://github.com/MhmtKilic/TestPlugins/releases/download/latest/ExampleProvider.cs3",
         "version": 1,
