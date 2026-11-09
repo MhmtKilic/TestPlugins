@@ -48,3 +48,4 @@ open class Sobreatsesuyp : ExtractorApi() {
         @JsonProperty("file")  val file: String?  = null
     )
 }
+
