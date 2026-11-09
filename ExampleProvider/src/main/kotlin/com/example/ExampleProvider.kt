@@ -7,7 +7,7 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
-class `4KFilmIzlesene` : MainAPI() {
+class FilmIzlesene : MainAPI() {
     override var mainUrl = "https://www.4kfilmizlesene.xyz"
     override var name = "4KFilmİzlesene"
     override val hasMainPage = true
@@ -17,6 +17,7 @@ class `4KFilmIzlesene` : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie)
 
+    // ! CloudFlare bypass
     override var sequentialMainPage = true
     override var sequentialMainPageDelay       = 50L
     override var sequentialMainPageScrollDelay = 50L
@@ -106,7 +107,7 @@ class `4KFilmIzlesene` : MainAPI() {
         val rating =
             document.selectFirst("div.imdb-count")?.text()?.split(" ")?.first()?.trim()
         val actors = document.select("div.actors").map { it.text() }
-        val trailer = document.selectFirst("div.container iframe")?.attr("src")
+        val trailer = document.select("div.container iframe")?.attr("src")
 
         return newMovieLoadResponse(title, url, TvType.Movie, url) {
             this.posterUrl = poster
@@ -130,7 +131,6 @@ class `4KFilmIzlesene` : MainAPI() {
         val iframe   = fixUrlNull(document.selectFirst("div.video-content iframe")?.attr("src")) ?: return false
         Log.d("4KI", "iframe » ${iframe}")
 
-        // Hata veren kısım burasıydı, artık utils paketinden geldiği için sorunsuz derlenecek
         loadExtractor(iframe, "${mainUrl}/", subtitleCallback, callback)
         return true
     }
